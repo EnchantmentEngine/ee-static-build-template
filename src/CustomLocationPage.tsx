@@ -1,5 +1,7 @@
 import '@ir-engine/client/src/engine'
 
+import '@ir-engine/spatial'
+
 import {
   EntityTreeComponent,
   UndefinedEntity,
@@ -9,38 +11,29 @@ import {
   setComponent
 } from '@ir-engine/ecs'
 import { ECSState } from '@ir-engine/ecs/src/ECSState'
-import { Engine } from '@ir-engine/ecs/src/Engine'
-import {
-  defineState,
-  getMutableState,
-  getState,
-  useImmediateEffect,
-  useMutableState,
-  useReactiveRef
-} from '@ir-engine/hyperflux'
+import { defineState, getMutableState, getState, useImmediateEffect, useMutableState } from '@ir-engine/hyperflux'
 import { ReferenceSpaceState } from '@ir-engine/spatial'
-import { CameraComponent } from '@ir-engine/spatial/src/camera/components/CameraComponent'
 import { NameComponent } from '@ir-engine/spatial/src/common/NameComponent'
-import { Vector3_Up } from '@ir-engine/spatial/src/common/constants/MathConstants'
+import { Vector3_Up, Vector3_Zero } from '@ir-engine/spatial/src/common/constants/MathConstants'
 import { destroySpatialEngine, initializeSpatialEngine } from '@ir-engine/spatial/src/initializeEngine'
 import { MeshComponent } from '@ir-engine/spatial/src/renderer/components/MeshComponent'
 import { VisibleComponent } from '@ir-engine/spatial/src/renderer/components/VisibleComponent'
 import { useEngineCanvas } from '@ir-engine/spatial/src/renderer/functions/useEngineCanvas'
 import { TransformComponent } from '@ir-engine/spatial/src/transform/components/TransformComponent'
-import { TransformSystem, computeTransformMatrix } from '@ir-engine/spatial/src/transform/systems/TransformSystem'
+import { TransformSystem } from '@ir-engine/spatial/src/transform/systems/TransformSystem'
 
-import React, { useEffect } from 'react'
-import { BoxGeometry, Mesh, MeshBasicMaterial } from 'three'
+import React, { useEffect, useRef } from 'react'
+import { BoxGeometry, Matrix4, Mesh, MeshBasicMaterial } from 'three'
 
 const SceneState = defineState({
-  name: 'ee.minimalist.SceneState',
+  name: 'ir.minimalist.SceneState',
   initial: {
     entity: UndefinedEntity
   }
 })
 
 const UpdateSystem = defineSystem({
-  uuid: 'ee.minimalist.UpdateSystem',
+  uuid: 'ir.minimalist.UpdateSystem',
   insert: { before: TransformSystem },
   execute: () => {
     const entity = getState(SceneState).entity
@@ -49,9 +42,13 @@ const UpdateSystem = defineSystem({
     const elapsedSeconds = getState(ECSState).elapsedSeconds
     const transformComponent = getComponent(entity, TransformComponent)
     transformComponent.rotation.setFromAxisAngle(Vector3_Up, elapsedSeconds)
+
+    const viewerEntity = getState(ReferenceSpaceState).viewerEntity
+
+    // console.log(getComponent(viewerEntity, TransformComponent).rotation.toArray())
   },
   reactor: function () {
-    const viewerEntity = useMutableState(ReferenceSpaceState).viewerEntity.value
+    const { originEntity, viewerEntity } = useMutableState(ReferenceSpaceState).value
 
     useEffect(() => {
       if (!viewerEntity) return
@@ -59,7 +56,7 @@ const UpdateSystem = defineSystem({
       // Create a new entity
       const entity = createEntity()
       setComponent(entity, TransformComponent)
-      setComponent(entity, EntityTreeComponent, { parentEntity: Engine.instance.originEntity })
+      setComponent(entity, EntityTreeComponent, { parentEntity: originEntity })
 
       // Create a box at the origin
       const mesh = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial({ color: 0x00ff00 }))
@@ -69,11 +66,10 @@ const UpdateSystem = defineSystem({
 
       // Make the camera look at the box
       const cameraTransform = getComponent(viewerEntity, TransformComponent)
-      const camera = getComponent(viewerEntity, CameraComponent)
       cameraTransform.position.set(5, 2, 0)
-      cameraTransform.rotation.copy(camera.quaternion)
-      computeTransformMatrix(viewerEntity)
-      camera.lookAt(0, 0, 0)
+      cameraTransform.rotation.setFromRotationMatrix(
+        new Matrix4().lookAt(cameraTransform.position, Vector3_Zero, Vector3_Up)
+      )
 
       getMutableState(SceneState).entity.set(entity)
     }, [viewerEntity])
@@ -83,7 +79,7 @@ const UpdateSystem = defineSystem({
 })
 
 export default function Template() {
-  const [ref, setRef] = useReactiveRef()
+  const ref = useRef(document.body)
 
   useImmediateEffect(() => {
     initializeSpatialEngine()
@@ -94,9 +90,5 @@ export default function Template() {
 
   useEngineCanvas(ref)
 
-  return (
-    <>
-      <div ref={setRef} style={{ width: '100%', height: '100%' }} />
-    </>
-  )
+  return <></>
 }
