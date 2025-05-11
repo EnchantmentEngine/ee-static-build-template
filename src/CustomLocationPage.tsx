@@ -42,10 +42,6 @@ const UpdateSystem = defineSystem({
     const elapsedSeconds = getState(ECSState).elapsedSeconds
     const transformComponent = getComponent(entity, TransformComponent)
     transformComponent.rotation.setFromAxisAngle(Vector3_Up, elapsedSeconds)
-
-    const viewerEntity = getState(ReferenceSpaceState).viewerEntity
-
-    // console.log(getComponent(viewerEntity, TransformComponent).rotation.toArray())
   },
   reactor: function () {
     const { originEntity, viewerEntity } = useMutableState(ReferenceSpaceState).value
