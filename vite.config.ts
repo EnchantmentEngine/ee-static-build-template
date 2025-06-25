@@ -23,19 +23,23 @@ All portions of the code written by the Infinite Reality Engine team are Copyrig
 Infinite Reality Engine. All Rights Reserved.
 */
 
+import { viteCommonjs } from '@originjs/vite-plugin-commonjs'
 import packageRoot from 'app-root-path'
 import dotenv from 'dotenv'
 import fs from 'fs'
 import path from 'path'
 import { defineConfig, UserConfig } from 'vite'
+import viteCompression from 'vite-plugin-compression2'
+import { nodePolyfills } from 'vite-plugin-node-polyfills'
+import svgr from 'vite-plugin-svgr'
 import manifestJson from './manifest.json'
 
-export default defineConfig(async ({ command }) => {
+export default defineConfig(async () => {
   dotenv.config({
     path: packageRoot.path + '/.env.local'
   })
 
-  const isDev = process.env.APP_ENV === 'development'
+  const isDevOrLocal = process.env.APP_ENV === 'development' || process.env.VITE_LOCAL_BUILD === 'true'
 
   const base = `https://${process.env['STATIC_BUILD_HOST'] ?? 'localhost:3000'}/`
 
@@ -47,7 +51,7 @@ export default defineConfig(async ({ command }) => {
   const returned = {
     define: define,
     server: {
-      cors: isDev ? false : true,
+      cors: !isDevOrLocal,
       hmr:
         process.env.VITE_HMR === 'true'
           ? {
@@ -61,11 +65,11 @@ export default defineConfig(async ({ command }) => {
       headers: {
         'Origin-Agent-Cluster': '?1'
       },
-      ...(isDev
+      ...(isDevOrLocal
         ? {
             https: {
-              key: fs.readFileSync(path.join(packageRoot.path, 'certs/key.pem')),
-              cert: fs.readFileSync(path.join(packageRoot.path, 'certs/cert.pem'))
+              key: fs.readFileSync(path.join(packageRoot.path, process.env.KEY || 'certs/key.pem')),
+              cert: fs.readFileSync(path.join(packageRoot.path, process.env.CERT || 'certs/cert.pem'))
             }
           }
         : {})
@@ -78,7 +82,18 @@ export default defineConfig(async ({ command }) => {
         target: 'es2020'
       }
     },
-    plugins: [],
+    plugins: [
+      svgr(),
+      nodePolyfills(),
+      viteCompression({
+        include: /\.(js|mjs|json|css)$/i,
+        algorithm: 'brotliCompress',
+        deleteOriginalAssets: true
+      }),
+      viteCommonjs({
+        include: ['use-sync-external-store']
+      })
+    ],
     build: {
       target: 'esnext',
       sourcemap: process.env.VITE_SOURCEMAPS === 'true' ? true : false,
